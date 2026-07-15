@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# wrzuc do /usr/lib/systemd/system-sleep/
+
+
+case "$1" in
+    post)
+        # czekamy na siec
+        MAX_RETRIES=10
+        COUNT=0
+        
+        while [ $COUNT -lt $MAX_RETRIES ]; do
+            # spr DNS
+            if ping -c 1 -W 1 1.1.1.1 >/dev/null 2>&1; then
+                echo "$(date): Sieć dostępna po $COUNT sek." >> /var/log/nextdns-resume.log
+                break
+            fi
+            COUNT=$((COUNT + 1))
+            sleep 1
+        done
+        # kops w usluge
+        systemctl restart nextdns
+        /usr/bin/nextdns activate
+        # w8, aż DNS wstanie
+        sleep 1
+        # Zapisujemy odpowiedź z serwera do loga
+        RESPONSE=$(/usr/bin/curl -s "https://link-ip.nextdns.io/89bd6a/d026f4ee8b51832d")
+        echo "$(date): Wybudzono. Odpowiedź NextDNS: $RESPONSE" >> /var/log/nextdns-resume.log
+        ;;
+esac
