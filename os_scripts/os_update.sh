@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 #########################
 #
@@ -10,7 +10,6 @@
 
 set -euo pipefail
 
-# 1. go where the script is
 cd "$(dirname "$0")"
 
 # --- colours ---
@@ -38,7 +37,7 @@ send_notif() {
 log_message() {
     local kolor="$1"
     local tresc="$2"
-    if [ -z "$tresc" ]; then
+    if [[ -z "$tresc" ]]; then
         tresc="$kolor"
         kolor="$C_RESET"
     fi
@@ -49,14 +48,55 @@ log_message() {
 show_progress() {
     local pid=$1
     local delay=0.5
-    if [ -z "$pid" ]; then return; fi
+    if [[ -z "$pid" ]]; then return; fi
 
     echo -n -e "${C_YELLOW}Procesuje mordo, Poczeaj "
     while kill -0 "$pid" 2>/dev/null; do
         echo -n "#"
-        sleep $delay
+        sleep "$delay"
     done
     echo -e " [GOTOWE]${C_RESET}"
+}
+
+    offer_full_upgrade() {
+
+    log_message "${C_BOLD}" "Sprawdzam możliwość Full Upgrade..."
+
+    if ! sudo apt-get -s full-upgrade 2>&1 | grep -q "^Inst "; then
+        log_message "${C_GREEN}" "Brak pakietów wymagających Full Upgrade."
+        return 0
+    fi
+
+    log_message "${C_YELLOW}" "Pykniemy Full Upgrade?"
+    log_message "${C_YELLOW}" "Wpadnie nowy kernel/dodatkowe pakiety ;)"
+
+    local full_decyzja    
+
+    echo ""
+    echo -e "${C_YELLOW}${C_BOLD}Wychylic Lubelskigo Fulla? (t/N/y/Y):${C_RESET}\c"
+
+    read -r -t 60 full_decyzja || full_decyzja="n"
+
+    if [[ "$full_decyzja" =~ ^[tTyY]$ ]]; then
+
+        log_message "${C_GREEN}" "Chlup! Lubelski Full..."
+
+        if sudo -E apt-get \
+            -o Dpkg::Options::="--force-confdef" \
+            -o Dpkg::Options::="--force-confold" \
+            full-upgrade -y 2>&1 | tee >(while IFS= read -r line; do
+                echo "$(date '+%H:%M:%S') $line" >> "$LOG"
+            done)
+        then
+            log_message "${C_GREEN}" "Luubelski Full wychylon Dla Jego!"
+        else
+            log_message "${C_RED}" "No i Rozlales Fulla! :("
+            return 1
+        fi
+
+    else
+        log_message "${C_YELLOW}" "No i po ptokach! Pominięto Full Upgrade."
+    fi
 }
 
 export DEBIAN_FRONTEND=noninteractive
@@ -107,6 +147,8 @@ if sudo -E apt-get \
         echo "$(date '+%H:%M:%S') $line" >> "$LOG"
     done)    
 then
+
+    offer_full_upgrade
 
     # POSPRZATAJ
     log_message "${C_BOLD}" "[3/3] Sprzatam Cache..."
