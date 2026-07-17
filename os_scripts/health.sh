@@ -2,22 +2,26 @@
 
 set -euo pipefail
 
-# Konfiguracja loga
-LOG_FILE="/home/f3t1/Scripts/logs/health_cron_log.log"
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+LOG_FILE="$SCRIPT_DIR/../logs/health_cron_log.log"
 
 send_notification() {
+    # check if notify-send exists
+    command -v notify-send >/dev/null || return
     # find user
     local CURRENT_USER=$(who | awk '{print $1}' | head -n1)
-    local USER_ID=$(id -u "$CURRENT_USER")
-
+    
     # no user --> halt
     [[ -z "$CURRENT_USER" ]] && return
+
+    local USER_ID=$(id -u "$CURRENT_USER")
 
     local TITLE="$1"
     local MSG="$2"
 
     # Wysyłanie powiadomienia z poprawną ścieżką do szyny danych (DBUS)
-    runuser -l "$CURRENT_USER" -c "DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$USER_ID/bus notify-send '$TITLE' '$MSG' --icon=dialog-information"
+    runuser -l "$CURRENT_USER" -c \
+"env DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$USER_ID/bus notify-send \"$TITLE\" \"$MSG\" --icon=dialog-information"
 }
 
 # Kolory w terminalu
@@ -40,7 +44,8 @@ log() {
     # Wyświetla na ekran (z kolorami jeśli w terminalu)
     echo -e "$MESSAGE"
     # Zapisuje do pliku (bez kolorów, z datą)
-    echo -e "$MESSAGE" | sed 's/\x1b\[[0-9;]*m//g' | xargs -I {} echo "$(date '+%Y-%m-%d %H:%M:%S') : {}" >> "$LOG_FILE"
+    CLEAN_MESSAGE=$(echo -e "$MESSAGE" | sed 's/\x1b\[[0-9;]*m//g')
+    echo "$(date '+%Y-%m-%d %H:%M:%S') : $CLEAN_MESSAGE" >> "$LOG_FILE"
 }
 
 log "${YELLOW}========= STAN SYSTEMU - $(date) =========${NC}"
@@ -58,7 +63,7 @@ fi
 # S.M.A.R.T.
 log "${GREEN}[2/5] Stan dysku (S.M.A.R.T.):${NC}"
     if command -v smartctl &> /dev/null; then
-	DISK="/dev/sda"
+	DISK=$(lsblk -ndo NAME,TYPE | awk '$2=="disk"{print "/dev/"$1; exit}')
 	SMART_RES=$(smartctl -H $DISK | grep "result")
 	log "${SMART_RES:-Nie udało się pobrać statusu}"
     else
@@ -76,11 +81,14 @@ log "${GREEN}[3/5] Temperatury CPU:${NC}"
 
 # Błędy 
 log "${GREEN}[4/5] Krytyczne błędy w logach (24h):${NC}"
-ERRORS=$(journalctl --since "24 hours ago" -p 0..3 --no-pager | tail -n 5)
-if [ -z "$ERRORS" ]; then
-    log "Brak krytycznych błędów, bądź logi są czyste :)"
+ERROR_COUNT=$(journalctl --since "24 hours ago" -p 0..3 --no-pager -q | grep -c '^')
+
+if [ "$ERROR_COUNT" -eq 0 ]; then
+    log "Brak krytycznych błędów..."
 else
-    log "${RED}$ERRORS${NC}"
+    log "${RED}Ola Boga! Masz $ERROR_COUNT wpisów błędów w dzienniku:${NC}"
+
+    journalctl --since "24 hours ago" -p 0..3 --no-pager -o cat | tail -n 20
 fi
 
 # RAM
