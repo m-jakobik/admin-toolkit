@@ -1,30 +1,52 @@
 #!/bin/sh
 
-# wrzuc do /usr/lib/systemd/system-sleep/
+# Put this script in:
+# /usr/lib/systemd/system-sleep/
 
+LOG_FILE="/var/log/nextdns-resume.log"
+MAX_RETRIES=10
+NETWORK_OK=0
 
 case "$1" in
     post)
-        # czekamy na siec
-        MAX_RETRIES=10
+        echo "$(date): Resume detected." >> "$LOG_FILE"
+
+        # Wait for network connectivity
         COUNT=0
-        
-        while [ $COUNT -lt $MAX_RETRIES ]; do
-            # spr DNS
+        while [ "$COUNT" -lt "$MAX_RETRIES" ]; do
             if ping -c 1 -W 1 1.1.1.1 >/dev/null 2>&1; then
-                echo "$(date): Sieć dostępna po $COUNT sek." >> /var/log/nextdns-resume.log
+                NETWORK_OK=1
+                echo "$(date): Network available after ${COUNT}s." >> "$LOG_FILE"
                 break
             fi
+
             COUNT=$((COUNT + 1))
             sleep 1
         done
-        # kops w usluge
-        systemctl restart nextdns
-        /usr/bin/nextdns activate
-        # w8, aż DNS wstanie
-        sleep 1
-        # Zapisujemy odpowiedź z serwera do loga
-        RESPONSE=$(/usr/bin/curl -s "https://link-ip.nextdns.io/89bd6a/d026f4ee8b51832d")
-        echo "$(date): Wybudzono. Odpowiedź NextDNS: $RESPONSE" >> /var/log/nextdns-resume.log
+
+        if [ "$NETWORK_OK" -eq 1 ]; then
+            echo "$(date): Restarting NextDNS..." >> "$LOG_FILE"
+
+            systemctl restart nextdns
+
+            if /usr/bin/nextdns activate; then
+                echo "$(date): NextDNS activated." >> "$LOG_FILE"
+            else
+                echo "$(date): ERROR: nextdns activate failed." >> "$LOG_FILE"
+                exit 1
+            fi
+
+            RESPONSE=$(
+                /usr/bin/curl -fsS \
+                    --max-time 5 \
+                    "https://link-ip.nextdns.io/89bd6a/d026f4ee8b51832d" \
+                    2>/dev/null || echo "No response"
+            )
+
+            echo "$(date): NextDNS response: $RESPONSE" >> "$LOG_FILE"
+
+        else
+            echo "$(date): ERROR: Network unavailable after ${MAX_RETRIES}s." >> "$LOG_FILE"
+        fi
         ;;
 esac
