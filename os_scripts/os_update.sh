@@ -1,20 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #########################
 #
 #
-#   No podnies se te pakiety v2 ;]
+#  Debian based OS update&&upgrade 
 #
 #
 ########################
 
-# jak COKOLWIEK padnie w pajpie, calosc P zwroci FAILA, bez tego - poleci dalej! :O
 set -euo pipefail
 
-# 1. FIX NA LOKALIZACJĘ: Idź tam, gdzie jest skrypt
+# 1. go where the script is
 cd "$(dirname "$0")"
 
-# --- KOLORY ---
+# --- colours ---
 C_GREEN='\033[0;32m'
 C_CYAN='\033[0;36m'
 C_YELLOW='\033[1;33m'
@@ -26,7 +25,7 @@ TUDEJ=$(date "+%Y-%m-%d %H:%M")
 LOG="/home/f3t1/Scripts/logs/aktualizacja.log"
 mkdir -p "$(dirname "$LOG")"
 
-# --- FUNKCJE ---
+# --- functions ---
 
 check_internet() {
     curl -fsSL --connect-timeout 5 https://deb.debian.org > /dev/null 2>&1
@@ -43,10 +42,7 @@ log_message() {
         tresc="$kolor"
         kolor="$C_RESET"
     fi
-    # w terminalu z kolorami
     echo -e "${kolor}${tresc}${C_RESET}"
-    
-    # Usuwa kody kolorów/wycina wszystkie kody zaczynające się od ESC [
     echo -e "${tresc}" | sed 's/\x1b\[[0-9;]*m//g' >> "$LOG"
 }
 
@@ -63,12 +59,9 @@ show_progress() {
     echo -e " [GOTOWE]${C_RESET}"
 }
 
-# JADYMY!
-
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=l
 
-# Dej kredki, mam horom curkje
 echo -e "${C_BOLD}Odpalam wrotki...${C_RESET}"
 sudo -v || exit 1 
 
@@ -90,7 +83,7 @@ fi
 log_message "${C_BOLD}" "[1/3] Aktualizuję listę aplikacji..."
 sudo apt-get update >> "$LOG" 2>&1 &
 PID_ZADANIA=$!
-show_progress $PID_ZADANIA
+show_progress "$PID_ZADANIA"
 
 # NO I CO TAM W TRAWIE PUSZCZY?
 log_message "${C_BOLD}" "[2/3] Co zaktualizujemy?"
