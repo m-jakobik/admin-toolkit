@@ -25,13 +25,13 @@ fi
 # czek wolne miejsce
 disk_before=$(df / --output=avail | tail -1)
 
-echo -e "${YELLOW_BOLD}<--- ANDIAMO: Porządki w Mint 22.3 (Cache + Kernel + Vesktop Fix + Flatpak) --->${NC}"
+echo -e "${YELLOW_BOLD}<--- ANDIAMO: Porządki w Zoo (Cache + Kernel + Vesktop Fix + Flatpak) --->${NC}"
 sleep 2
 
-# Aptitude - Czyszczenie pakietów
+# Czyszczenie pakietów
 echo -e "${YELLOW_BOLD}[1/4] Sprzątanie cache Apt - pakietów...${NC}"
-apt-get autoclean -y
 apt-get autoremove -y
+apt-get autoclean -y
 apt-get clean -y
 sleep 2
 
@@ -65,8 +65,7 @@ for v in $(echo "$all_versions" | sort -u); do
 
     if [ $is_to_keep -eq 0 ] && [ "$v" != "$running_ver" ]; then
         # Szukamy paczek, które mają DOKŁADNIE ten numer wersji w NAZWIE
-        # grep -F sprawia, że kropki są traktowane dosłownie (fixed string)
-        pkgs=$(dpkg-query -W -f='${Package}\n' | grep -F "$v")
+        pkgs=$(dpkg-query -W -f='${Package}\n' | grep -E "^linux-.*${v}(-|$)")
         to_remove="$to_remove $pkgs"
     fi
 done
@@ -91,14 +90,14 @@ else
         echo -e "${YELLOW_BOLD}Rozpoczynam usuwanie...${NC}"
         
         # Główne usuwanie
-        sudo apt-get purge -y $to_remove
-        sudo apt-get autoremove -y
+        apt-get purge -y $to_remove
+        apt-get autoremove -y
         
         # Czyszczenie pozostałości (status rc)
         rc_pkgs=$(dpkg -l | grep '^rc' | awk '{print $2}')
         if [ -n "$rc_pkgs" ]; then
             echo -e "${YELLOW_BOLD}Sprzątam resztki konfiguracji (status rc)...${NC}"
-            sudo apt-get purge -y $rc_pkgs
+            apt-get purge -y $rc_pkgs
            fi
         sleep 2
     else
@@ -129,7 +128,7 @@ for v in $all_boot_versions; do
     if [ $is_to_keep -eq 0 ] && [ "$v" != "$running_ver" ]; then
         if [ -n "$v" ]; then
             echo "Usuwam osierocone pliki dla wersji: $v"
-            sudo rm -f /boot/*-"$v"-generic
+            rm -f /boot/*-"$v"-generic
         fi
     fi
 done
@@ -138,7 +137,7 @@ done
 # Sprzątanie nagłówków w /usr/src/
 # ==============================================================================
 echo -e "${YELLOW_BOLD}Sprawdzam nagłówki w /usr/src/...${NC}"
-cd /usr/src
+cd /usr/src || exit
 headers_to_remove=""
 
 for dir in linux-headers-*; do
@@ -162,7 +161,7 @@ if [ -n "$headers_to_remove" ]; then
     if [[ "$resp" =~ ^[yY][eE]?[sS]?$ ]]; then
         for dir in $headers_to_remove; do
             # Dodatkowe zabezpieczenie przed pustą zmienną
-            [ -n "$dir" ] && sudo rm -rf "$dir"
+            [ -n "$dir" ] && rm -rf "$dir"
             echo "Usunięto: $dir"
         done
     else
@@ -173,7 +172,7 @@ else
 fi
 
 # Aktualizacja GRUBa
-sudo update-grub
+update-grub
 echo -e "${GREEN_BOLD}Osom! W kernelach czysto! Lecimy Dalej!${NC}"
 sleep 2
 
