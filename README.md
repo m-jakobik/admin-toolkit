@@ -15,6 +15,8 @@ Scripts are written in Bash and designed for Debian-based systems.
 - [Automation](#automation)
 - [Documentation](#documentation)
 - [Requirements](#requirements)
+- [Notes](#notes)
+- [License](#license)
 
 ---
 
@@ -23,12 +25,17 @@ Scripts are written in Bash and designed for Debian-based systems.
 Most scripts require root privileges
 
 
-## Scripts
+## Script List
 
 - os_updater.sh - system update helper
 - MiCleaner.sh - system cleanup (APT cache, old kernels, Flatpak and Vesktop cache)
 - gdrive_nc_keepassDB_sync.sh - sync local copy of KeePass pwdDB to Gdrive + Nextcloud, and create local backup 
 - health.sh - system health check (SSD, temperature, memory, journal errors) with logging support. Works with cron/anacron
+- pogoda.sh - Weather information widget for Conky
+- ssd_status.sh - SSD health status widget for Conky
+- check_ip.sh - Network information widget for Conky.
+
+
 
 
 # Scripts
@@ -242,3 +249,10 @@ sudo apt install curl jq bc smartmontools rclone conky
 These scripts are primarily developed for personal Linux administration and desktop/server maintenance.
 
 They are intentionally kept simple, readable and easy to modify ;)
+
+---
+
+## License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+---
