@@ -3,7 +3,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-LOG_FILE="$SCRIPT_DIR/../logs/health_cron_log.log"
+LOG_DIR="$SCRIPT_DIR/../logs"
+LOG_FILE="$LOG_DIR/health_cron_log.log"
+
+mkdir -p "$LOG_DIR"
 
 send_notification() {
     # check if notify-send exists
