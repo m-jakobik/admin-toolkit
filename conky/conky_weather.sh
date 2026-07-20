@@ -1,32 +1,36 @@
 #!/bin/bash
 
-# Współrzędne
+RAW=/tmp/weather_raw.json
+
 LAT="52.25"
 LON="21.29"
 
 # temperature_2m, relative_humidity_2m, rain, snowfall, wind_speed_10m, wind_direction_10m
 URL="https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,apparent_temperature,surface_pressure,relative_humidity_2m,rain,snowfall,weather_code,wind_speed_10m,wind_direction_10m&models=icon_seamless&timezone=auto&forecast_days=1"
 
-curl -s -m 10 "$URL" -o /tmp/weather_raw.json
+if ! curl -fsS -m 10 "$URL" -o "$RAW"; then
+    echo "Lipton, brak danych :(" > /tmp/weather_conky
+    exit 1
+fi
 
-# Wyciąganie danych z JSON
-TEMP=$(jq '.current.temperature_2m' /tmp/weather_raw.json)
-FEEL=$(jq -r '.current.apparent_temperature' /tmp/weather_raw.json)
-HUMID=$(jq '.current.relative_humidity_2m' /tmp/weather_raw.json)
-RAIN=$(jq '.current.rain' /tmp/weather_raw.json)
-SNOW=$(jq '.current.snowfall' /tmp/weather_raw.json)
-WIND_S=$(jq '.current.wind_speed_10m' /tmp/weather_raw.json)
-WIND_D=$(jq '.current.wind_direction_10m' /tmp/weather_raw.json)
-WCODE=$(jq '.current.weather_code' /tmp/weather_raw.json)
+# Wyciąganie danych od dzejsona
+TEMP=$(jq '.current.temperature_2m' "$RAW")
+FEEL=$(jq -r '.current.apparent_temperature' "$RAW")
+HUMID=$(jq '.current.relative_humidity_2m' "$RAW")
+RAIN=$(jq '.current.rain' "$RAW")
+SNOW=$(jq '.current.snowfall' "$RAW")
+WIND_S=$(jq '.current.wind_speed_10m' "$RAW")
+WIND_D=$(jq '.current.wind_direction_10m' "$RAW")
+WCODE=$(jq '.current.weather_code' "$RAW")
 
 # Wyciąganie Wschodu i Zachodu (i formatowanie do samej godziny)
-SUNR_RAW=$(jq -r '.daily.sunrise[0]' /tmp/weather_raw.json)
-SUNS_RAW=$(jq -r '.daily.sunset[0]' /tmp/weather_raw.json)
-SUNR=$(echo $SUNR_RAW | cut -d'T' -f2)
-SUNS=$(echo $SUNS_RAW | cut -d'T' -f2)
+#SUNR_RAW=$(jq -r '.daily.sunrise[0]' /tmp/weather_raw.json)
+#SUNS_RAW=$(jq -r '.daily.sunset[0]' /tmp/weather_raw.json)
+#SUNR=$(echo $SUNR_RAW | cut -d'T' -f2)
+#SUNS=$(echo $SUNS_RAW | cut -d'T' -f2)
 
-#obsluga opadow
-SUMA=$(echo "scale=1; ($RAIN + $SNOW)/1" | bc -l | sed 's/^\./0./')
+#opady
+#SUMA=$(echo "scale=1; ($RAIN + $SNOW)/1" | bc -l | sed 's/^\./0./')
 
 # Logika kolorów dla temperatury
 if [ "$(echo "$TEMP > 27" | bc -l)" -eq 1 ]; then
@@ -87,8 +91,7 @@ case $WCODE in
     *)          DESC="WTF ($WCODE)" ;;
 esac
 
-# Łączenie wszystkiego w czytelny format dla Conky
-# Możesz to dowolnie układać
+# Łącze wsio do conky'ego
 {
     echo "$DESC"
     echo '${color gray}Temp: '"\${font :bold}${T_COL}${TEMP}°C\${font}"
