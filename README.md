@@ -33,7 +33,7 @@ Most scripts require root privileges
 - health.sh - system health check (SSD, temperature, memory, journal errors) with logging support. Works with cron/anacron
 - pogoda.sh - Weather information widget for Conky
 - ssd_status.sh - SSD health status widget for Conky
-- check_ip.sh - Network information widget for Conky.
+- check_ip.sh - Network information widget for Conky
 
 
 
