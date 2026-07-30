@@ -28,7 +28,7 @@
 2. Enable maintenance mode
 
 ```
-sudo -u www-data php occ maintenance:mode --on
+sudo -u www-data php /var/www/nextcloud/occ maintenance:mode --on
 ```
 
 3. Rename current installation:
@@ -38,13 +38,14 @@ mv /var/www/nextcloud /var/www/nextcloud.old
 ```
 
 4. Unzip and mv /tmp/nc /var/www/nextcloud + chown -R www-data:www-data /var/www/nextcloud
-5. Perform application upgrade:
+5. **copy config/config.php** from an old instance to a new one + **remove CAN_INSTALL** file
+6. Perform application upgrade:
 
 ```
 sudo -u www-data php /var/www/nextcloud/occ upgrade
 ```
 
-6. Verify application health:
+7. Verify application health:
 
 ```
 systemctl status nginx
@@ -63,6 +64,12 @@ and
 grep -E "OC_VersionString|OC_Version" /var/www/nextcloud/version.php
 ```
 
+- Review application logs
+- Switch maintenance mode off:
+
+```
+sudo -u www-data php /var/www/nextcloud/occ maintenance:mode --off
+```
 - Rebuild db indexes:
 
 ```
@@ -75,13 +82,8 @@ sudo -u www-data php /var/www/nextcloud/occ db:add-missing-indices
 sudo -u www-data php /var/www/nextcloud/occ maintenance:repair
 ```
 
-- Review application logs
-- Switch maintenance mode off:
-
-```
-sudo -u www-data php /var/www/nextcloud/occ maintenance:mode --off
-```
 - Confirm user access
+
 
 ## Rollback procedure
 
