@@ -21,7 +21,7 @@ C_BOLD='\033[1m'
 C_RESET='\033[0m'
 
 TUDEJ=$(date "+%Y-%m-%d %H:%M")
-LOG="/home/f3t1/Scripts/logs/aktualizacja.log"
+LOG="$HOME/Scripts/logs/aktualizacja.log"
 mkdir -p "$(dirname "$LOG")"
 
 # --- functions ---
