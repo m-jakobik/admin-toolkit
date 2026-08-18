@@ -1,28 +1,37 @@
 #!/bin/bash
 
-LOG_FILE="$HOME/Scripts/logs/ip_history.txt"
+-set uo pipefail
+
+LOG_DIR="$HOME/Scripts/logs"
+LOG_FILE="$LOG_DIR/ip_history.txt"
+
+mkdir -p "$LOG_DIR"
+
 LAST_IP_FILE="/tmp/last_known_ip.txt"
 LAST_CHANGE_FILE="/tmp/last_ip_change_time.txt"
 
-# Pobieranie danych
-CURRENT_IP=$(dig +short myip.opendns.com @resolver1.opendns.com | tr -d '\n')
-NOW=$(date +%s)
+# Pobieranie danych, z grepem filtrujacym wynik/blad
+CURRENT_IP=$(dig +short +time=2 +tries=1 myip.opendns.com @resolver1.opendns.com 2>/dev/null | grep -E '^[0-9.]+$')
 
-# Sprawdz połączenie (czy IP nie jest puste)
-if [ -z "$CURRENT_IP" ]; then
-    echo '${color gray}Public IP: ${color}Offline'
-    exit 0
+if [[ -z "$CURRENT_IP" ]]; then
+    CURRENT_IP=$(dig +short +time=2 +tries=1 whoami.cloudflare @1.1.1.1 2>/dev/null | grep -E '^[0-9.]+$')
 fi
 
+if [[ -z "$CURRENT_IP" ]]; then
+    CURRENT_IP='${color red}Network Error!${color}'
+fi
+
+NOW=$(date +%s)
+
 # Logika sprawdzania poprzedniego IP
-if [ -f "$LAST_IP_FILE" ]; then
+if [[ -f "$LAST_IP_FILE" ]]; then
     read -r LAST_IP < "$LAST_IP_FILE"
 else
     LAST_IP=""
 fi
 
-# Logika sprawdzania czasu ostatniej zmiany (naprawia błąd 20000 dni)
-if [ -f "$LAST_CHANGE_FILE" ]; then
+# Logika sprawdzania czasu ostatniej zmiany
+if [[ -f "$LAST_CHANGE_FILE" ]]; then
     read -r LAST_TIME < "$LAST_CHANGE_FILE"
     # Jeśli plik jest pusty z jakiegoś powodu, ustaw NOW
     [[ -z "$LAST_TIME" ]] && LAST_TIME=$NOW
@@ -46,7 +55,7 @@ if [[ "$CURRENT_IP" != "$LAST_IP" && -n $LAST_IP ]]; then
 fi
 
 # Jeśli to pierwsze uruchomienie w ogóle, zapisz obecne IP jako startowe
-if [ ! -f "$LAST_IP_FILE" ]; then
+if [[ ! -f "$LAST_IP_FILE" ]]; then
     echo "$CURRENT_IP" > "$LAST_IP_FILE"
 fi
 
