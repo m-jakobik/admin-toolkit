@@ -4,7 +4,7 @@ Collection of personal Linux administration scripts and utilities.
 
 Keep it simple, as those scripts are meant for everyday Linux administration, system maintenance, monitoring and automation.
 
-Scripts are written in Bash and designed for Debian-based systems.
+Scripts are written in Bash and designed for Ubuntu-based systems.
 
 
 
@@ -44,18 +44,24 @@ Most scripts require root privileges
 
 ### `os_updater.sh`
 
-Debian-based system update helper.
+Ubuntu-based system update helper with independent Ubuntu mirror selection.
 
 Features:
 - package list update
 - standard upgrade
 - optional full-upgrade support
-- cleanup of unused packages
+- independent Ubuntu mirror configuration
+- automatic fallback to an alternative mirror
+- cleanup of obsolete package cache
+- update logging
+- desktop notifications
+
+The script uses its own temporary APT sources list and does not modify the system's APT repository configuration.
 
 Usage:
 
 ```bash
-sudo ./os_updater.sh
+./os_updater.sh
 ```
 
 ---
