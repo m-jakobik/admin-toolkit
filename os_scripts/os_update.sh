@@ -21,6 +21,9 @@ C_BOLD='\033[1m'
 C_RESET='\033[0m'
 
 TUDEJ=$(date "+%Y-%m-%d %H:%M")
+PRIMARY_MIRROR="pl.archive.ubuntu.com/ubuntu"
+FALLBACK_MIRROR="archive.ubuntu.com/ubuntu"
+SOURCES_LIST="$HOME/Scripts/tmp/sources.list"
 LOG="$HOME/Scripts/logs/aktualizacja.log"
 mkdir -p "$(dirname "$LOG")"
 
@@ -29,6 +32,34 @@ mkdir -p "$(dirname "$LOG")"
 check_internet() {
     curl -fsSL --connect-timeout 5 https://deb.debian.org > /dev/null 2>&1
 }
+
+if curl -4 -fsI --max-time 10 "http://${PRIMARY_MIRROR}/dists/noble/InRelease" >/dev/null; then
+    UBUNTU_MIRROR="$PRIMARY_MIRROR"
+    echo "Primary mirror dostepny: $PRIMARY_MIRROR"
+else
+    echo "Primary mirror NIE DOSTEPNY! - sprawdzam fallback: $FALLBACK_MIRROR"
+
+    if curl -4 -fsI --max-time 10 "http://${FALLBACK_MIRROR}/dists/noble/InRelease" >/dev/null; then
+        UBUNTU_MIRROR="$FALLBACK_MIRROR"
+        echo "Fallback mirror dostepny: $FALLBACK_MIRROR"
+    else
+        echo "BLAD! Dzejms Blad: Primary i fallback sa niedostepne!"
+        exit 1
+    fi
+fi
+
+
+echo "Jedziemy z: $UBUNTU_MIRROR"
+sleep 3
+
+mkdir -p "$(dirname "$SOURCES_LIST")"
+
+cat > "$SOURCES_LIST" <<EOF
+deb http://${UBUNTU_MIRROR} noble main restricted universe multiverse
+deb http://${UBUNTU_MIRROR} noble-updates main restricted universe multiverse
+deb http://${UBUNTU_MIRROR} noble-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+EOF
 
 send_notif() {
     notify-send "Aktualizacja Systemu" "$1" -i software-update-available
@@ -73,7 +104,7 @@ show_progress() {
     local full_decyzja    
 
     echo ""
-    echo -e "${C_YELLOW}${C_BOLD}Wychylic Lubelskigo Fulla? (t/N/y/Y):${C_RESET}\c"
+    echo -e "${C_YELLOW}${C_BOLD}Wychylic Lubelskigo Fulla? (t/T/y/Y):${C_RESET}\c"
 
     read -r -t 60 full_decyzja || full_decyzja="n"
 
@@ -82,6 +113,9 @@ show_progress() {
         log_message "${C_GREEN}" "Chlup! Lubelski Full..."
 
         if sudo -E apt-get \
+	    -o Dir::Etc::sourcelist="$SOURCES_LIST" \
+	    -o Dir::Etc::sourceparts="-" \
+	    -o APT::Get::List-Cleanup="0" \
             -o Dpkg::Options::="--force-confdef" \
             -o Dpkg::Options::="--force-confold" \
             full-upgrade -y 2>&1 | tee >(while IFS= read -r line; do
@@ -108,7 +142,7 @@ sudo -v || exit 1
 send_notif "Czeking De Aktualizejszynz..."
 
 echo -e "${C_CYAN}###############################################################${C_RESET}"
-log_message "${C_CYAN}${C_BOLD}" "       Aptitude Na Pelnej Kurtyzanie! (FINAL 2.0)"
+log_message "${C_CYAN}${C_BOLD}" "       Aptitude Na Pelnej Kurtyzanie! v2.1"
 log_message "${C_CYAN}" "               >> Dzis: $TUDEJ <<"
 echo -e "${C_CYAN}###############################################################${C_RESET}"
 
@@ -121,9 +155,21 @@ fi
 
 # LIST AKTUALIZATOR
 log_message "${C_BOLD}" "[1/3] Aktualizuję listę aplikacji..."
-sudo apt-get update >> "$LOG" 2>&1 &
+sudo apt-get -o Dir::Etc::sourcelist="$SOURCES_LIST" \
+             -o Dir::Etc::sourceparts="-" \
+             -o APT::Get::List-Cleanup="0" \
+             update >> "$LOG" 2>&1 &
+
 PID_ZADANIA=$!
+
 show_progress "$PID_ZADANIA"
+
+if wait "$PID_ZADANIA"; then
+    echo "APT update gr8 sakces m8!"
+else
+    echo "BLAD: apt-get update sie wywalil na ryja! :("
+    exit 1
+fi
 
 # NO I CO TAM W TRAWIE PUSZCZY?
 log_message "${C_BOLD}" "[2/3] Co zaktualizujemy?"
