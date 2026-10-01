@@ -25,7 +25,7 @@ PRIMARY_MIRROR="pl.archive.ubuntu.com/ubuntu"
 FALLBACK_MIRROR="archive.ubuntu.com/ubuntu"
 SOURCES_LIST="$HOME/Scripts/tmp/sources.list"
 LOG="$HOME/Scripts/logs/aktualizacja.log"
-mkdir -p "$(dirname "$LOG")"
+mkdir -p "$(dirname "$LOG")" "$(dirname "$SOURCES_LIST")"
 
 # --- functions ---
 
