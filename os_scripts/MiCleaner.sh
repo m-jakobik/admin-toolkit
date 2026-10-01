@@ -4,7 +4,7 @@ set -euo pipefail
 
 ############################################
 #
-#	MiCleaner 1.2
+#	MiCleaner 1.3
 #
 #	Wyczysc se OeSa!
 #
@@ -36,20 +36,67 @@ apt-get clean -y
 sleep 2
 
 # ==============================================================================
-# Sekcja usuwania starych kerneli i sprzątania syfu z /boot
+# Sekcja usuwania starych kerneli
 # ==============================================================================
 echo -e "${YELLOW_BOLD}[2/4] Usuwam stare kernele (zostawiam RUNNING - PREVIOUS)...${NC}"
 
 # Pobieramy aktualnie działającą wersję (zabezpieczenie absolutne)
 running_ver=$(uname -r | sed 's/-generic//g')
 
-# Pobieramy listę wersji zainstalowanych (tylko status 'ii')
-all_versions=$(dpkg-query -W -f='${Package} ${Status}\n' 'linux-image-[0-9]*' | grep 'install ok installed' | awk '{print $1}' | sed 's/linux-image-//g' | sed 's/-generic//g' | sort -V)
+# lista zainstalowanych (status 'ii')
+all_versions=$(dpkg-query -W -f='${Package} ${Status}\n' 'linux-image-[0-9]*' 2>/dev/null | \
+    awk '$2 == "install" && $3 == "ok" && $4 == "installed" {print $1}' | \
+    sed 's/linux-image-//g' | \
+    sed 's/-generic//g' | \
+    sort -V)
 
 # Zostaw 2 najnowsze
 versions_to_keep=$(echo "$all_versions" | sort -u | tail -n 2)
 # Łączymy "running" oraz "2 najnowsze"
 safe_versions=$(echo -e "$running_ver\n$versions_to_keep" | sort -u)
+
+# osierocone moduły kernela
+orphan_modules=""
+
+kernel_module_pkgs=$(dpkg-query -W -f='${Package} ${Status}\n' \
+    'linux-modules-[0-9]*' \
+    'linux-modules-extra-[0-9]*' 2>/dev/null | \
+    awk '$2 == "install" && $3 == "ok" && $4 == "installed" {print $1}')
+
+for pkg in $kernel_module_pkgs; do
+    case "$pkg" in
+        linux-modules-extra-*)
+            ver="${pkg#linux-modules-extra-}"
+            ;;
+        linux-modules-*)
+            ver="${pkg#linux-modules-}"
+            ;;
+        *)
+            continue
+            ;;
+    esac
+
+    ver="${ver%-generic}"
+
+    is_to_keep=0
+    for vk in $safe_versions; do
+        if [ "$vk" = "$ver" ]; then
+            is_to_keep=1
+            break
+        fi
+    done
+
+    if [ $is_to_keep -eq 0 ]; then
+        orphan_modules="$orphan_modules $pkg"
+    fi
+done
+
+if [ -n "$orphan_modules" ]; then
+    echo "Łooo widzę stare moduły kernela:"
+    echo "$orphan_modules"
+else
+    echo "Ni mo osieroconych modułów kernela."
+fi
 
 to_remove=""
 for v in $(echo "$all_versions" | sort -u); do
@@ -65,13 +112,18 @@ for v in $(echo "$all_versions" | sort -u); do
 
     if [ $is_to_keep -eq 0 ] && [ "$v" != "$running_ver" ]; then
         # Szukamy paczek, które mają DOKŁADNIE ten numer wersji w NAZWIE
-        pkgs=$(dpkg-query -W -f='${Package}\n' | grep -E "^linux-.*${v}(-|$)")
+        pkgs=$(dpkg-query -W -f='${Package}\n' | grep -E "^linux-.*${v}(-|$)" || true)
         to_remove="$to_remove $pkgs"
     fi
 done
 
+# wrzuc osierocone moduły do listy pakietów do usunięcia
+if [ -n "$orphan_modules" ]; then
+    to_remove="$to_remove $orphan_modules"
+fi
+
 if [ -z "$to_remove" ]; then
-    echo -e "${YELLOW_BOLD}Ola Boga! Tylko 1 lub 2 kernele w systemie. Nie usuwam nic!${NC}"
+    echo -e "${YELLOW_BOLD}Ola Boga! Brak seniorów w systemie. Nie tykam!${NC}"
 else
     echo -e "${RED_BOLD}ZIDENTYFIKOWANO STARE PAKIETY DO USUNIĘCIA:${NC}"
     echo "--------------------------------------------------------"
@@ -79,7 +131,7 @@ else
     echo "--------------------------------------------------------"
 
     # DRY-RUN
-    echo -e "${YELLOW_BOLD}SYMULACJA (Dry-run) za pomocą apt:${NC}"
+    echo -e "${YELLOW_BOLD}SYMULUJEMY PIERWIEJ:${NC}"
     apt-get purge -s $to_remove
 
     # INTERAKTYWNY BEZPIECZNIK
@@ -92,83 +144,74 @@ else
         # Główne usuwanie
         apt-get purge -y $to_remove
         apt-get autoremove -y
-        
-        # Czyszczenie pozostałości (status rc)
-        rc_pkgs=$(dpkg -l | grep '^rc' | awk '{print $2}')
-        if [ -n "$rc_pkgs" ]; then
-            echo -e "${YELLOW_BOLD}Sprzątam resztki konfiguracji (status rc)...${NC}"
-            apt-get purge -y $rc_pkgs
-           fi
         sleep 2
     else
         echo -e "${BLUE_BOLD}Anulowano operację. Nic nie zostało usunięte z pakietów.${NC}"
     fi
 fi
+# Czyszczenie pozostałości (status rc)
+        rc_pkgs=$(dpkg -l | awk '$1 == "rc" {print $2}')
+        if [ -n "$rc_pkgs" ]; then
+            echo -e "${YELLOW_BOLD}Sprzątam resztki konfiguracji (status rc)...${NC}"
+            apt-get purge -y $rc_pkgs
+           fi
+        sleep 2
 
-# Dodatkowy krok: czyszczenie pozostałości w /boot po usuniętych kernelach
-echo -e "\n${YELLOW_BOLD}Czyszczenie pozostałości w /boot...${NC}"
+# ==============================================================================
+# Sprzątanie starych nagłówków kernela
+# ==============================================================================
+echo -e "${YELLOW_BOLD}Sprawdzam istniejące nagłówki kernela...${NC}"
 
-# lista wersji, co zostawily pliki w /boot
-all_boot_versions=$(ls /boot/vmlinuz-* /boot/initrd.img-* /boot/config-* /boot/System.map-* 2>/dev/null | \
-    sed -r 's|.*/(vmlinuz\|initrd.img\|config\|System.map)-||' | \
-    sed 's/-generic//g' | sort -u)
+headers_to_remove=""
 
-for v in $all_boot_versions; do
-    # Pomijamy, jeśli to pusta zmienna (wynik braku plików)
-    [ -z "$v" ] && continue
+# zainstalowane pakiety (status 'ii')
+installed_headers=$(dpkg-query -W -f='${Package} ${Status}\n' 'linux-headers-*' 2>/dev/null | \
+    awk '$2 == "install" && $3 == "ok" && $4 == "installed" {print $1}')
 
+for pkg in $installed_headers; do
+
+    # !zostaw pakiet meta!
+    if [ "$pkg" = "linux-headers-generic" ]; then
+        continue
+    fi
+
+    # obczaj numer wersji z nazwy pakietu
+    ver=$(echo "$pkg" | sed 's/^linux-headers-//' | sed 's/-generic$//')
+
+    # sprawdz czy sa na liscie bezpiecznych (to_keep)
     is_to_keep=0
-    for vk in $versions_to_keep; do
-        if [ "$vk" = "$v" ]; then
+    for vk in $safe_versions; do
+        if [ "$vk" = "$ver" ]; then
             is_to_keep=1
             break
         fi
     done
 
-    if [ $is_to_keep -eq 0 ] && [ "$v" != "$running_ver" ]; then
-        if [ -n "$v" ]; then
-            echo "Usuwam osierocone pliki dla wersji: $v"
-            rm -f /boot/*-"$v"-generic
-        fi
+    if [ $is_to_keep -eq 0 ]; then
+        headers_to_remove="$headers_to_remove $pkg"
     fi
-done
-
-# ==============================================================================
-# Sprzątanie nagłówków w /usr/src/
-# ==============================================================================
-echo -e "${YELLOW_BOLD}Sprawdzam nagłówki w /usr/src/...${NC}"
-cd /usr/src || exit
-headers_to_remove=""
-
-for dir in linux-headers-*; do
-    # Sprawdzamy czy to faktycznie katalog
-    [ -d "$dir" ] || continue
-    
-    ver=$(echo "$dir" | sed 's/linux-headers-//g' | sed 's/-generic//g')
-    
-    # Warunek: nie zostawiamy wersji aktualnej i tych z listy "do zachowania"
-    if [[ ! "$safe_versions" =~ "$ver" ]]; then
-        headers_to_remove="$headers_to_remove $dir"
-    fi
-
 done
 
 if [ -n "$headers_to_remove" ]; then
-    echo -e "${RED_BOLD}ZIDENTYFIKOWANO NAGŁÓWKI DO USUNIĘCIA:${NC}"
+    echo -e "${RED_BOLD}ZIDENTYFIKOWANO STARE PAKIETY NAGŁÓWKÓW:${NC}"
+    echo "--------------------------------------------------------"
     echo "$headers_to_remove" | tr ' ' '\n'
-    
-    read -p "Czy chcesz usunąć powyższe nagłówki z /usr/src/? (y/N): " resp
+    echo "--------------------------------------------------------"
+
+    echo -e "${YELLOW_BOLD}SYMULUJEMY PIERWIEJ:${NC}"
+    apt-get purge -s $headers_to_remove
+
+    read -p "No i co, usuwamy? (y/N): " resp
+
     if [[ "$resp" =~ ^[yY][eE]?[sS]?$ ]]; then
-        for dir in $headers_to_remove; do
-            # Dodatkowe zabezpieczenie przed pustą zmienną
-            [ -n "$dir" ] && rm -rf "$dir"
-            echo "Usunięto: $dir"
-        done
+        echo -e "${YELLOW_BOLD}Usuwam stare nagłówki przez APT...${NC}"
+        apt-get purge -y $headers_to_remove
+        apt-get autoremove -y
     else
-        echo -e "${BLUE_BOLD}Anulowano usuwanie nagłówków.${NC}"
+        echo -e "${BLUE_BOLD}No i co ty robisz najlepszego?${NC}"
     fi
 else
-    echo "Brak zbędnych nagłówków w /usr/src/."
+    echo "Brak starych nagłówków kernela. Skipujemy"
 fi
 
 # Aktualizacja GRUBa
