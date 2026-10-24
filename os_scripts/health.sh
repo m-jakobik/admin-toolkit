@@ -3,29 +3,33 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-LOG_DIR="$SCRIPT_DIR/../logs"
+LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$LOG_DIR/health_cron_log.log"
 
 mkdir -p "$LOG_DIR"
 
 send_notification() {
-    # check if notify-send exists
-    command -v notify-send >/dev/null || return
-    # find user
-    local CURRENT_USER=$(who | awk '{print $1}' | head -n1)
-    
-    # no user --> halt
-    [[ -z "$CURRENT_USER" ]] && return
+    command -v notify-send >/dev/null || return 0
 
-    local USER_ID=$(id -u "$CURRENT_USER")
+    local CURRENT_USER USER_ID TITLE MSG
+    CURRENT_USER=$(who | awk 'NR==1 {print $1}')
+    [[ -n "$CURRENT_USER" ]] || return 0
 
-    local TITLE="$1"
-    local MSG="$2"
+    USER_ID=$(id -u "$CURRENT_USER") || return 0
+    TITLE="$1"
+    MSG="$2"
 
-    # Wysyłanie powiadomienia z poprawną ścieżką do szyny danych (DBUS)
-    runuser -l "$CURRENT_USER" -c \
-"env DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$USER_ID/bus notify-send \"$TITLE\" \"$MSG\" --icon=dialog-information"
+    if [[ $EUID -eq 0 ]]; then
+        runuser -u "$CURRENT_USER" -- \
+            env DISPLAY=:0 \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" \
+            notify-send "$TITLE" "$MSG" --icon=dialog-information \
+            || true
+    else
+        notify-send "$TITLE" "$MSG" --icon=dialog-information || true
+    fi
 }
+
 
 # Kolory w terminalu
 	if [ -t 1 ]; then
@@ -84,7 +88,7 @@ log "${GREEN}[3/5] Temperatury CPU:${NC}"
 
 # Błędy 
 log "${GREEN}[4/5] Krytyczne błędy w logach (24h):${NC}"
-ERROR_COUNT=$(journalctl --since "24 hours ago" -p 0..3 --no-pager -q | grep -c '^')
+ERROR_COUNT=$(journalctl --since "24 hours ago" -p 0..3 --no-pager -q | awk 'END {print NR}')
 
 if [ "$ERROR_COUNT" -eq 0 ]; then
     log "Brak krytycznych błędów..."
