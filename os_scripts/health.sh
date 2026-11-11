@@ -88,14 +88,17 @@ log "${GREEN}[3/5] Temperatury CPU:${NC}"
 
 # Błędy 
 log "${GREEN}[4/5] Krytyczne błędy w logach (24h):${NC}"
-ERROR_COUNT=$(journalctl --since "24 hours ago" -p 0..3 --no-pager -q | awk 'END {print NR}')
+ERROR_COUNT=$(journalctl --since "24 hours ago" -p 0..3 --no-pager -o json | jq -s 'length')
 
 if [ "$ERROR_COUNT" -eq 0 ]; then
     log "Brak krytycznych błędów..."
 else
     log "${RED}Ola Boga! Masz $ERROR_COUNT wpisów błędów w dzienniku:${NC}"
 
-    journalctl --since "24 hours ago" -p 0..3 --no-pager -o cat | tail -n 20
+    journalctl --since "24 hours ago" -p 0..3 --no-pager -n 10 -o short-iso |
+        while IFS= read -r line; do
+            log "$line"
+        done
 fi
 
 # RAM
